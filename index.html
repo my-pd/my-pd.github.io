@@ -1,66 +1,206 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="bn">
 <head>
-<meta charset="UTF-8">
-<title>My Private Drive</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<!-- Simple Style -->
-<style>
-body {
-  font-family: Arial, sans-serif;
-  padding: 20px;
-}
-
-button {
-  padding: 8px 14px;
-  margin: 5px 0;
-}
-
-.file-item {
-  margin: 8px 0;
-  border-bottom: 1px solid #ccc;
-  padding-bottom: 5px;
-}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MyDrive — Personal Cloud</title>
+  <style>
+    body{font-family:Inter,Arial,Helvetica,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+    .btn{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;}
+    .btn-primary{background:#2563eb;color:#fff;border:none;}
+    #fileList .item{border:1px solid #eee;padding:10px;border-radius:8px;margin:10px 0;display:flex;justify-content:space-between;align-items:center;}
+    img.thumb{height:64px;margin-right:12px;border-radius:6px;object-fit:cover;}
+    .meta{font-size:13px;color:#333;}
+    .small{font-size:12px;color:#666;}
+    input[type=file]{margin-top:8px;}
+  </style>
 </head>
-
 <body>
+  <header>
+    <h2>MyDrive</h2>
+    <div>
+      <span id="userEmail" class="small"></span>
+      <button id="btnLogout" class="btn" style="display:none;margin-left:8px;">Logout</button>
+    </div>
+  </header>
 
-<h2>Private Cloud Drive</h2>
-<button id="logoutBtn">Logout</button>
-<br><br>
+  <!-- Auth UI -->
+  <section id="authSection">
+    <h3>Login / Signup</h3>
+    <input id="email" type="email" placeholder="Email" /><br><br>
+    <input id="password" type="password" placeholder="Password" /><br><br>
+    <button id="btnLogin" class="btn btn-primary">Login</button>
+    <button id="btnSignup" class="btn">Signup</button>
+    <p id="authMsg" class="small"></p>
+  </section>
 
-<h3>Upload File</h3>
-<input type="file" id="fileInput">
-<button id="uploadBtn">Upload</button>
+  <!-- App UI -->
+  <section id="appSection" style="display:none;">
+    <div>
+      <h3>Upload file</h3>
+      <input id="fileInput" type="file" />
+      <button id="btnUpload" class="btn btn-primary">Upload</button>
+    </div>
 
-<h3>Your Files:</h3>
-<div id="fileList">Loading...</div>
+    <h3 style="margin-top:18px;">Your files</h3>
+    <div id="fileList">Loading...</div>
+  </section>
 
+  <script type="module">
+    // ====== CONFIG (আপনি আর কিছু পরিবর্তন করবেন না) ======
+    const SUPABASE_URL = "https://pqxljprvlqkaagxgvmax.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_dnfDucQZV0AtSazl31hTdg_-pYwn2jl";
+    const BUCKET = "mydrive";
+    // ======================================================
 
-<!-- Firebase Core Imports -->
-<script type="module" src="./firebase.js"></script>
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-<!-- App Logic -->
-<script type="module" src="./app.js"></script>
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-<!-- Protect Page -->
-<script type="module">
-  import { auth, onAuthStateChanged, signOut } from "./firebase.js";
+    // elements
+    const authSection = document.getElementById("authSection");
+    const appSection = document.getElementById("appSection");
+    const btnLogin = document.getElementById("btnLogin");
+    const btnSignup = document.getElementById("btnSignup");
+    const btnLogout = document.getElementById("btnLogout");
+    const authMsg = document.getElementById("authMsg");
+    const emailInput = document.getElementById("email");
+    const passInput = document.getElementById("password");
+    const userEmail = document.getElementById("userEmail");
+    const fileInput = document.getElementById("fileInput");
+    const btnUpload = document.getElementById("btnUpload");
+    const fileList = document.getElementById("fileList");
 
-  // Redirect if not logged in
-  onAuthStateChanged(auth, (user) => {
-    if (!user) {
-      window.location.href = "login.html";
+    // helper display
+    function showAuth(msg="") { authSection.style.display = ""; appSection.style.display = "none"; authMsg.textContent = msg; userEmail.textContent = ""; btnLogout.style.display='none'; }
+    function showApp(user) { authSection.style.display = "none"; appSection.style.display = ""; userEmail.textContent = user.email; btnLogout.style.display='inline-block'; loadFiles(); }
+
+    // On load: check session
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.user) {
+        showApp(data.session.user);
+      } else {
+        showAuth();
+      }
+    })();
+
+    // Signup
+    btnSignup.addEventListener("click", async () => {
+      const email = emailInput.value.trim();
+      const password = passInput.value;
+      if (!email || !password) return authMsg.textContent = "Email ও password দিন।";
+      authMsg.textContent = "Creating account...";
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) authMsg.textContent = "Error: " + error.message;
+      else authMsg.textContent = "Signup successful — email confirm (if enabled). Login now.";
+    });
+
+    // Login
+    btnLogin.addEventListener("click", async () => {
+      const email = emailInput.value.trim();
+      const password = passInput.value;
+      if (!email || !password) return authMsg.textContent = "Email ও password দিন।";
+      authMsg.textContent = "Signing in...";
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { authMsg.textContent = "Error: " + error.message; return; }
+      showApp(data.user);
+    });
+
+    // Logout
+    btnLogout.addEventListener("click", async () => {
+      await supabase.auth.signOut();
+      showAuth("Logged out");
+    });
+
+    // Upload file (path: userId/filename)
+    btnUpload.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) return alert("প্রথমে ফাইল সিলেক্ট করুন।");
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) return alert("Not logged in");
+      const userId = sessionData.session.user.id;
+      const filename = `${Date.now()}_${file.name}`;
+      const path = `${userId}/${filename}`;
+
+      btnUpload.disabled = true;
+      btnUpload.textContent = "Uploading...";
+
+      const { data, error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl: '3600', upsert: false });
+      btnUpload.disabled = false;
+      btnUpload.textContent = "Upload";
+
+      if (error) {
+        console.error(error);
+        return alert("Upload failed: " + error.message);
+      }
+      alert("Uploaded ✅");
+      fileInput.value = "";
+      loadFiles();
+    });
+
+    // Load user's files
+    async function loadFiles() {
+      fileList.innerHTML = "Loading...";
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) { fileList.innerHTML = "Not logged in"; return; }
+      const userId = sessionData.session.user.id;
+
+      // list only this user's folder
+      const { data: items, error } = await supabase.storage.from(BUCKET).list(userId, { limit: 100, offset: 0 });
+      if (error) { fileList.innerHTML = "Error: " + error.message; return; }
+      if (!items || items.length === 0) { fileList.innerHTML = "<i>No files yet.</i>"; return; }
+
+      fileList.innerHTML = "";
+      for (const it of items) {
+        // public URL (works if bucket public); if private, signed URL needed server-side
+        const publicUrl = supabase.storage.from(BUCKET).getPublicUrl(it.name).data.publicUrl;
+
+        const div = document.createElement("div");
+        div.className = "item";
+
+        const ext = it.name.split('.').pop().toLowerCase();
+        let leftHTML = "";
+        if (["png","jpg","jpeg","gif","webp"].includes(ext)) {
+          leftHTML = `<img class="thumb" src="${publicUrl}" alt="${it.name}" />`;
+        }
+
+        div.innerHTML = `
+          <div style="display:flex;align-items:center;">
+            ${leftHTML}
+            <div class="meta">
+              <div><strong>${it.name.split('/').pop()}</strong></div>
+              <div class="small">${new Date(it.created_at).toLocaleString()}</div>
+            </div>
+          </div>
+          <div>
+            <a class="btn" href="${publicUrl}" target="_blank">Open</a>
+            <button class="btn" data-key="${it.name}">Delete</button>
+          </div>
+        `;
+        fileList.appendChild(div);
+      }
+
+      // Attach delete handlers
+      document.querySelectorAll('[data-key]').forEach(btn => {
+        btn.onclick = async (e) => {
+          if (!confirm("Delete this file?")) return;
+          const path = e.target.dataset.key;
+          const { error } = await supabase.storage.from(BUCKET).remove([path]);
+          if (error) return alert("Delete failed: " + error.message);
+          alert("Deleted ✅");
+          loadFiles();
+        };
+      });
     }
-  });
 
-  // Logout Button
-  document.getElementById("logoutBtn").addEventListener("click", () => {
-    signOut(auth);
-  });
-</script>
+    // Auth state listener
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) showApp(session.user);
+      else showAuth();
+    });
 
+  </script>
 </body>
 </html>
