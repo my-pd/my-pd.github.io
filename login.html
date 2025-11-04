@@ -1,1 +1,37 @@
 
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login | My Private Drive</title>
+  <script type="module" src="firebase.js"></script>
+</head>
+<body>
+  <h2>Admin Login</h2>
+
+  <input type="email" id="email" placeholder="Email"><br><br>
+  <input type="password" id="password" placeholder="Password"><br><br>
+  <button id="loginBtn">Login</button>
+
+  <p id="msg"></p>
+
+  <script type="module">
+    import { auth, signInWithEmailAndPassword } from "./firebase.js";
+
+    document.getElementById("loginBtn").onclick = () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          document.getElementById("msg").innerText = "✅ Login Successful!";
+          setTimeout(() => {
+            window.location.href = "index.html";
+          }, 1500);
+        })
+        .catch((err) => {
+          document.getElementById("msg").innerText = "❌ " + err.message;
+        });
+    };
+  </script>
+</body>
+</html>
