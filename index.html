@@ -20,3 +20,52 @@
 
 
 <button id="logoutBtn">Logout</button>
+
+
+<h2>Upload File</h2>
+<input type="file" id="fileInput"><br><br>
+<button id="uploadBtn">Upload</button>
+
+<h3>Your Files:</h3>
+<div id="fileList"></div>
+
+<script type="module">
+import { storage, auth, db, ref, uploadBytes, getDownloadURL, listAll, collection, addDoc } from "./firebase.js";
+
+document.getElementById("uploadBtn").onclick = async () => {
+  const file = document.getElementById("fileInput").files[0];
+  if (!file) return alert("Choose a file first");
+
+  const filePath = `uploads/${auth.currentUser.uid}/${file.name}`;
+  const storageRef = ref(storage, filePath);
+
+  await uploadBytes(storageRef, file);
+
+  const url = await getDownloadURL(storageRef);
+
+  // Save file URL in Firestore
+  await addDoc(collection(db, "files"), {
+    url,
+    name: file.name,
+    uid: auth.currentUser.uid,
+    created: new Date()
+  });
+
+  alert("✅ File uploaded");
+  loadFiles();
+};
+
+async function loadFiles() {
+  const querySnapshot = await listAll(ref(storage, `uploads/${auth.currentUser.uid}/`));
+  const container = document.getElementById("fileList");
+  container.innerHTML = "";
+
+  for (const item of querySnapshot.items) {
+    const url = await getDownloadURL(item);
+    container.innerHTML += `<p><a href="${url}" target="_blank">${item.name}</a></p>`;
+  }
+}
+
+// Load user files when page opens
+auth.onAuthStateChanged((u) => { if (u) loadFiles(); });
+</script>
